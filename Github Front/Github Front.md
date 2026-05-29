@@ -1,3 +1,45 @@
+###### Safe workflow for both remote and local changes needing merged given no conflicts:
+```
+cd "C:\Users\mini\Documents\Obsidian Vault\Workbook"
+
+git stash push -u -m "local work before pulling github web changes"
+
+git pull --rebase origin main
+
+git stash pop
+
+git status
+
+git add .
+
+git commit -m "Resolve sync conflict and update workbook"
+
+git push origin main 
+
+```
+
+
+
+
+
+Safe workflow being:
+```
+cd "C:\Users\mini\Documents\Obsidian Vault\Workbook"  
+  
+git fetch origin  
+  
+git status  
+  
+git pull --rebase origin main  
+  
+git push origin main
+```
+
+
+Danger being:
+git push --force
+git push -f
+
 | Step | Phase            | Task                                         | PowerShell / Git Command                                       | Expected Result                                                            |
 | ---: | ---------------- | -------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
 |    1 | Initial setup    | Open the Obsidian folder you want to publish | `cd "C:\Users\mini\Documents\Obsidian Vault\Workbook"`         | Terminal is inside the specific folder that should become the repo         |

@@ -1,3 +1,5 @@
+#private 
+
 Copy/paste-ready operational checklist table![[Screenshot 2026-05-19 at 12.10.52 PM.heic]]
 ##### Structure iterations: 
 
