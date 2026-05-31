@@ -1,0 +1,1 @@
+Add-LocalGroupMember -Group "Users" -Member Interdev.com\jrowell@Interdev.com
