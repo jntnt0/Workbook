@@ -1,1 +1,0 @@
-Get-AzResourceProvider -ProviderNamespace Microsoft.Network | Select-Object -ExpandProperty ResourceTypes | Where-Object { $_.ResourceTypeName -match 'gateway' } | Select ResourceTypeName
