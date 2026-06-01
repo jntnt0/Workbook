@@ -1,2 +1,0 @@
-Key points:
-- vlan tagging is just the technique that applies VLANS
