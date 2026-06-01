@@ -1,119 +1,178 @@
-# Function to cleanup files in a directory
-function CleanupFiles {
-    param(
-        [string]$Path,
-        [string]$FileType
+# =============================================================================
+# disk_cleanup.ps1
+# Remove temporary files, cached data, and delivery optimization artifacts
+# from a Windows endpoint to reclaim disk space.
+#
+# Overview:
+#   This script targets well-known Windows temporary and cache locations that
+#   accumulate over time and are safe to remove without impacting system
+#   stability. It is intended for use on managed endpoints where scheduled or
+#   on-demand cleanup is required outside of the built-in Disk Cleanup utility
+#   (cleanmgr.exe), which cannot be easily scripted or integrated into
+#   automation pipelines.
+#
+# Usage:
+#   Run as a local administrator or via a privileged scheduled task.
+#
+#       .\disk_cleanup.ps1
+#       .\disk_cleanup.ps1 -WhatIf
+#       .\disk_cleanup.ps1 -LogPath "D:\Logs\disk_cleanup.log"
+#
+# Parameters:
+#   -LogPath    Path to the output log file.
+#               Default: C:\Logs\disk_cleanup.log
+#   -WhatIf     Report what would be removed without deleting anything.
+#
+# Targets:
+#   - User temp directory (%TEMP%)
+#   - Windows temp directory (%SystemRoot%\Temp)
+#   - Windows Update download cache (SoftwareDistribution\Download)
+#   - Delivery Optimization cache (SoftwareDistribution\DeliveryOptimization)
+#   - Windows Error Reporting files (%SystemRoot%\Windows\WER)
+#   - DirectX Shader Cache
+#   - Windows Explorer thumbnail cache
+#   - Recycle Bin
+#
+# Notes:
+#   The script removes files only — directory structures are preserved.
+#   Windows Update and Delivery Optimization targets are safe to clear;
+#   Windows will re-download any updates that have not yet been applied.
+#   The Recycle Bin is emptied system-wide, not per-user.
+# =============================================================================
+
+[CmdletBinding(SupportsShouldProcess)]
+param (
+    [string]$LogPath = "C:\Logs\disk_cleanup.log"
+)
+
+# ---------------------------------------------------------------------------
+# Tracking counters
+# ---------------------------------------------------------------------------
+$RemovedCount = 0
+$FailedCount  = 0
+$BytesFreed   = 0
+
+# ---------------------------------------------------------------------------
+# Helper: write a timestamped entry to both the log file and the console
+# ---------------------------------------------------------------------------
+function Write-Log {
+    param (
+        [string]$Message,
+        [ValidateSet("Info", "Warn", "Error")]
+        [string]$Level = "Info"
     )
 
-    $cleanupResults = @()
+    $Prefix = switch ($Level) {
+        "Info"  { "[INFO ]" }
+        "Warn"  { "[WARN ]" }
+        "Error" { "[ERROR]" }
+    }
 
+    $Entry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Prefix $Message"
+    Add-Content -Path $LogPath -Value $Entry -ErrorAction SilentlyContinue
+    Write-Host $Entry
+}
+
+# ---------------------------------------------------------------------------
+# Ensure log directory exists
+# ---------------------------------------------------------------------------
+$LogDirectory = Split-Path $LogPath -Parent
+if (-not (Test-Path -Path $LogDirectory)) {
     try {
-        $files = Get-ChildItem -Path $Path -File -ErrorAction Stop
+        New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+    }
+    catch {
+        Write-Error "Failed to create log directory '$LogDirectory': $($_.Exception.Message)"
+        exit 1
+    }
+}
 
-        foreach ($file in $files) {
+# ---------------------------------------------------------------------------
+# Core cleanup function — removes all files in a given directory
+# ---------------------------------------------------------------------------
+function Remove-DirectoryContents {
+    param (
+        [string]$Path,
+        [string]$Label
+    )
+
+    if (-not (Test-Path -Path $Path)) {
+        Write-Log "Path not found, skipping: $Path ($Label)" -Level Warn
+        return
+    }
+
+    $Files = Get-ChildItem -Path $Path -File -ErrorAction SilentlyContinue
+
+    if (-not $Files) {
+        Write-Log "No files found in: $Path ($Label)"
+        return
+    }
+
+    Write-Log "Cleaning $Label ($($Files.Count) files)..."
+
+    foreach ($File in $Files) {
+        if ($PSCmdlet.ShouldProcess($File.FullName, "Remove file")) {
             try {
-                Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                Write-Verbose "Deleted $($file.FullName)"
-                $cleanupResults += [PSCustomObject]@{
-                    "Status" = "Success"
-                    "File" = $file.Name
-                    "FileType" = $FileType
-                }
-            } catch {
-                $cleanupResults += [PSCustomObject]@{
-                    "Status" = "Failed"
-                    "File" = $file.Name
-                    "Error" = $_.Exception.Message
-                    "FileType" = $FileType
-                }
+                $Size = $File.Length
+                Remove-Item -Path $File.FullName -Force -ErrorAction Stop
+                $script:RemovedCount++
+                $script:BytesFreed += $Size
+            }
+            catch {
+                Write-Log "Failed to remove '$($File.FullName)': $($_.Exception.Message)" -Level Error
+                $script:FailedCount++
             }
         }
-    } catch {
-        $cleanupResults += [PSCustomObject]@{
-            "Status" = "Failed"
-            "File" = "N/A"
-            "Error" = $_.Exception.Message
-            "FileType" = $FileType
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Recycle Bin cleanup
+# ---------------------------------------------------------------------------
+function Clear-RecycleBinSafe {
+    if ($PSCmdlet.ShouldProcess("Recycle Bin", "Empty")) {
+        try {
+            Clear-RecycleBin -Force -ErrorAction Stop
+            Write-Log "Recycle Bin emptied."
+        }
+        catch {
+            Write-Log "Failed to empty Recycle Bin: $($_.Exception.Message)" -Level Error
+            $script:FailedCount++
         }
     }
-
-    return $cleanupResults
 }
 
-# Function to empty Recycle Bin
-function CleanupRecycleBin {
-    param()
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+Write-Log "Disk cleanup started. WhatIf: $($WhatIfPreference)"
 
-    $cleanupResults = @()
+$CleanupTargets = @(
+    @{ Path = $env:TEMP;                                                                          Label = "User Temp" },
+    @{ Path = "$env:SystemRoot\Temp";                                                             Label = "System Temp" },
+    @{ Path = "$env:SystemRoot\SoftwareDistribution\Download";                                   Label = "Windows Update Cache" },
+    @{ Path = "$env:SystemRoot\SoftwareDistribution\DeliveryOptimization";                       Label = "Delivery Optimization Cache" },
+    @{ Path = "$env:SystemRoot\Windows\WER";                                                     Label = "Windows Error Reporting" },
+    @{ Path = "$env:USERPROFILE\AppData\Local\Microsoft\Windows\INetCache\ShaderCache";          Label = "DirectX Shader Cache" },
+    @{ Path = "$env:USERPROFILE\AppData\Local\Microsoft\Windows\Explorer";                       Label = "Thumbnail Cache" }
+)
 
-    try {
-        Clear-RecycleBin -Force -ErrorAction Stop
-        Write-Verbose "Recycle Bin emptied"
-        $cleanupResults += [PSCustomObject]@{
-            "Status" = "Success"
-            "File" = "Recycle Bin"
-            "FileType" = "Recycle Bin"
-        }
-    } catch {
-        $cleanupResults += [PSCustomObject]@{
-            "Status" = "Failed"
-            "File" = "Recycle Bin"
-            "Error" = $_.Exception.Message
-            "FileType" = "Recycle Bin"
-        }
-    }
-
-    return $cleanupResults
+foreach ($Target in $CleanupTargets) {
+    Remove-DirectoryContents -Path $Target.Path -Label $Target.Label
 }
 
-# Perform disk cleanup with progress reporting
-Write-Output "Starting disk cleanup..."
+Clear-RecycleBinSafe
 
-# Delete temporary files in the user's temp directory and track success/failure (ignore errors)
-$cleanupResults = @()
-$tempDir = [System.IO.Path]::GetTempPath()
-Write-Output "Cleaning up temporary files in $tempDir..."
-$cleanupResults += CleanupFiles -Path $tempDir -FileType "Temporary Files"
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+$FreedMB = [math]::Round($BytesFreed / 1MB, 2)
 
-# Clean up system files
-Write-Output "Cleaning up system files..."
-$cleanupResults += CleanupFiles -Path $env:SystemRoot -FileType "System Files"
-$cleanupResults += CleanupFiles -Path "$env:SystemRoot\SoftwareDistribution\Download" -FileType "Windows Update Files"
-$cleanupResults += CleanupFiles -Path "$env:SystemRoot\Logs" -FileType "Logs"
-$cleanupResults += CleanupFiles -Path "$env:SystemRoot\Temp" -FileType "Temp Files"
-
-# Empty the Recycle Bin
-Write-Output "Emptying Recycle Bin..."
-$cleanupResults += CleanupRecycleBin
-
-# Clean up Windows Error Reporting files
-Write-Output "Cleaning up Windows Error Reporting files..."
-$cleanupResults += CleanupFiles -Path "$env:SystemRoot\Windows\WER" -FileType "Windows Error Reporting Files"
-
-# Clean up Delivery Optimization files
-Write-Output "Cleaning up Delivery Optimization files..."
-$cleanupResults += CleanupFiles -Path "$env:SystemRoot\SoftwareDistribution\DeliveryOptimization" -FileType "Delivery Optimization Files"
-
-# Clean up DirectX Shader Cache
-Write-Output "Cleaning up DirectX Shader Cache..."
-$cleanupResults += CleanupFiles -Path "$env:USERPROFILE\AppData\Local\Microsoft\Windows\INetCache\ShaderCache" -FileType "DirectX Shader Cache"
-
-# Clean up thumbnail cache
-Write-Output "Cleaning up thumbnail cache..."
-$cleanupResults += CleanupFiles -Path "$env:USERPROFILE\AppData\Local\Microsoft\Windows\Explorer" -FileType "Thumbnail Cache"
-
-# Count successful and failed deletions
-$successfulDeletions = ($cleanupResults | Where-Object { $_.Status -eq "Success" }).Count
-$failedDeletions = ($cleanupResults | Where-Object { $_.Status -eq "Failed" }).Count
-
-# Display summary of deletions
-Write-Output "Disk cleanup complete."
-Write-Output "Successfully deleted: $successfulDeletions files"
-
-if ($failedDeletions -gt 0) {
-    Write-Warning "Failed to delete: $failedDeletions files."
+Write-Log "-----------------------------------------------------------"
+Write-Log "Cleanup complete."
+Write-Log "Files removed : $RemovedCount"
+Write-Log "Failures      : $FailedCount"
+Write-Log "Space freed   : $FreedMB MB"
+if ($WhatIfPreference) {
+    Write-Log "WhatIf mode was active — no changes were made." -Level Warn
 }
-
-
-
-
