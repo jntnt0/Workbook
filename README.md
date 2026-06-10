@@ -31,4 +31,4 @@ Notes are written in Markdown and optimized for Obsidian. Most technical notes f
 
 ## Contact
 
-**Jonathan Tant** — tant88jonathan@gmail.com
+**Jonathan Tant** - tant88jonathan@gmail.com
