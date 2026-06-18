@@ -4,7 +4,7 @@ This repository is a public infrastructure lab portfolio focused on systems admi
 
 It documents hands-on work across Cisco CML, Azure, Microsoft 365, Intune, Windows Server, Linux, PowerShell, and general infrastructure operations. The goal is to show practical troubleshooting methodology, configuration notes, verification steps, rollback thinking, and runbook-style documentation.
 
-⸻
+---
 
 Contents
 
@@ -62,7 +62,7 @@ Topics include:
 * PowerShell and common administrative tasks
 * Troubleshooting workflows and documentation
 
-⸻
+---
 
 Certifications, Exams, and Education
 
@@ -71,7 +71,7 @@ Certifications, Exams, and Education
 * Microsoft 365 Administrator exam completed
 * B.S. Cybersecurity, Kennesaw State University - in progress, senior standing
 
-⸻
+---
 
 Format
 
@@ -88,7 +88,7 @@ Common structure:
 * Failure analysis
 * Operational notes
 
-⸻
+---
 
 Purpose
 
@@ -96,7 +96,7 @@ This repository is meant to function as a living technical portfolio and working
 
 It is not intended to be a polished textbook. It is meant to show how I organize, document, test, troubleshoot, and reinforce infrastructure concepts across networking, cloud, Microsoft administration, endpoint management, and systems administration.
 
-⸻
+---
 
 Contact
 
