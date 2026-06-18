@@ -17,7 +17,7 @@ Topics include:
 * OSPF, EIGRP, BGP, and routing behavior
 * VLANs, trunks, EtherChannel, STP/MST, and switching operations
 * DMVPN, VXLAN, NAT, ACLs, VPNs, and firewall behavior
-* Cisco CML lab documentation
+* Cisco CML controller hosted on Azure IaaS for remote networking labs and infrastructure troubleshooting documentation.
 * Verification, rollback, and failure analysis workflows
 
 Notes are written in an operational format: mental model, configuration, verification, troubleshooting, rollback, and failure analysis.
